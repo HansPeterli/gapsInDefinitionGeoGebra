@@ -22,10 +22,10 @@ Ein Userscript, das für GeoGebra-Funktionen automatisch **Definitionslücken** 
 
 Du brauchst in jedem Browser einen **Userscript-Manager** – eine kleine Erweiterung, die das Skript automatisch auf der GeoGebra-Seite lädt. Empfohlen:
 
-| Manager | Plattformen | Kosten |
-|---|---|---|
-| [Tampermonkey](https://www.tampermonkey.net/) | Windows, Android (via Kiwi/Firefox) | kostenlos |
-| [Userscripts](https://github.com/quoid/userscripts) | iOS / iPadOS / macOS (Safari) | kostenlos, Open Source |
+| Manager | Plattformen
+|---|---|
+| [Tampermonkey](https://www.tampermonkey.net/) | Windows, Android (via Kiwi/Firefox) |
+| [Userscripts](https://github.com/quoid/userscripts) | iOS / iPadOS / macOS (Safari) |
 
 ---
 
