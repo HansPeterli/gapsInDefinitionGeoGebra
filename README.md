@@ -24,7 +24,7 @@ Du brauchst in jedem Browser einen **Userscript-Manager** – eine kleine Erweit
 
 | Manager | Plattformen | Kosten |
 |---|---|---|
-| [Tampermonkey](https://www.tampermonkey.net/) | Windows, macOS, Android (via Kiwi/Firefox), iOS | teils kostenpflichtig auf iOS |
+| [Tampermonkey](https://www.tampermonkey.net/) | Windows, Android (via Kiwi/Firefox) | kostenlos |
 | [Userscripts](https://github.com/quoid/userscripts) | iOS / iPadOS / macOS (Safari) | kostenlos, Open Source |
 
 ---
@@ -75,19 +75,8 @@ Der Standard-Chrome auf Android unterstützt **keine** Erweiterungen. Zwei Alter
 
 ### 🍎 iOS / iPadOS (Safari)
 
-<details open>
-<summary><b>Variante A – Tampermonkey-App (einfachste Lösung, kostenpflichtig)</b></summary>
-
-1. Im App Store nach [`Tampermonkey`](https://apps.apple.com/app/tampermonkey/id6738342400) suchen und installieren.
-2. **Einstellungen** → **Safari** → **Erweiterungen** → `Tampermonkey` aktivieren und Berechtigung erteilen (z. B. „Für alle Websites erlauben“ oder zumindest für `geogebra.org` freigeben).
-3. Tampermonkey-App öffnen → neues Skript erstellen.
-4. Inhalt von `defLuecke.js` komplett hineinkopieren und speichern.
-5. Safari öffnen → GeoGebra laden: [geogebra.org/classic](https://www.geogebra.org/classic).
-
-</details>
-
 <details>
-<summary><b>Variante B – Userscripts (kostenlos, Open Source)</b></summary>
+<summary><b>Userscripts (kostenlos, Open Source)</b></summary>
 
 1. Im App Store die kostenlose App [`Userscripts`](https://apps.apple.com/app/userscripts/id1463298887) installieren.
 2. **Einstellungen** → **Safari** → **Erweiterungen** → `Userscripts` aktivieren und Website-Zugriff erlauben.
