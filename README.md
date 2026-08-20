@@ -51,23 +51,23 @@ Du brauchst in jedem Browser einen **Userscript-Manager** – eine kleine Erweit
 Der Standard-Chrome auf Android unterstützt **keine** Erweiterungen. Zwei Alternativen:
 
 <details>
-<summary><b>Variante A – Kiwi Browser (empfohlen, kostenlos)</b></summary>
+<summary><b>Variante A – Firefox für Android</b></summary>
+
+1. [Firefox](https://play.google.com/store/apps/details?id=org.mozilla.firefox) aus dem Play Store installieren.
+2. Menü → **Add-ons** → `Tampermonkey` suchen → installieren.
+3. Skript wie gewohnt im Tampermonkey-Dashboard einfügen und speichern.
+4. GeoGebra in Firefox öffnen.
+
+</details>
+
+<details>
+<summary><b>Variante B – Kiwi Browser</b></summary>
 
 1. [Kiwi Browser](https://play.google.com/store/apps/details?id=com.kiwibrowser.browser) aus dem Play Store installieren.
 2. Kiwi Browser öffnen → Menü (⋮) → **Extensions**.
 3. **„Weitere Erweiterungen laden“** → Chrome Web Store → `Tampermonkey` installieren.
 4. Tampermonkey-Dashboard öffnen → neues Skript → Inhalt von `defLuecke.js` einfügen → speichern.
 5. GeoGebra in Kiwi Browser öffnen: [geogebra.org/classic](https://www.geogebra.org/classic).
-
-</details>
-
-<details>
-<summary><b>Variante B – Firefox für Android</b></summary>
-
-1. [Firefox](https://play.google.com/store/apps/details?id=org.mozilla.firefox) aus dem Play Store installieren.
-2. Menü → **Add-ons** → `Tampermonkey` suchen → installieren.
-3. Skript wie gewohnt im Tampermonkey-Dashboard einfügen und speichern.
-4. GeoGebra in Firefox öffnen.
 
 </details>
 
