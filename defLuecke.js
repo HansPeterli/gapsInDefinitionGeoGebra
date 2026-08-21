@@ -2,7 +2,7 @@
 // @name         GeoGebra Lücken automatisch
 // @namespace    http://tampermonkey.net/
 // @version      23.0
-// @description  Erkennt hebbare Definitionslücken und steuert sie pro Funktion
+// @description  Erkennt hebbare Definitionslücken
 // @author       Hans_Peterli
 // @match        https://www.geogebra.org/*
 // @grant        none
