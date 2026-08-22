@@ -967,7 +967,7 @@
     }
     function findeNullstellenMitGeoGebra(nenner, index) {
         const ergebnis = [];
-        const tempName = "__LueckenNenner_"+index+"_"+Date.now();
+        const tempName = "ggbLueckenNenner"+index+"_"+Date.now();
         const befehl = tempName+"(x)="+nenner;
         try {
             const erfolg = ggb.evalCommand(befehl);
