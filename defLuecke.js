@@ -1,14 +1,13 @@
 // ==UserScript==
-// @name         GeoGebra Lücken automatisch
-// @namespace    http://tampermonkey.net/
-// @version      23.0
-// @description  Erkennt hebbare Definitionslücken
-// @author       Hans_Peterli
-// @match        https://www.geogebra.org/*
+// @name         GeoGebra Definitionslücken
+// @namespace    https://github.com/HansPeterli/gapsInDefinitionGeoGebra
+// @version      1.0
+// @description  Erkennt und zeigt hebbare Definitionslücken von Funktionen in GeoGebra automatisch an.
+// @author       HansPeterli
+// @match        https://www.geogebra.org/classic*
 // @grant        none
-// @run-at       document-end
-// @inject-into  page
 // ==/UserScript==
+
 (function() {
     'use strict';
     let ggb = null;
@@ -317,13 +316,94 @@
             return"^"+digits;
         });
     }
+    function normalisiereWurzeln(s) {
+        if (!s || s.indexOf("√") === -1) {
+            return s;
+        }
+        let ergebnis = "";
+        let i = 0;
+        while (i < s.length) {
+            if (s[i] !== "√") {
+                ergebnis += s[i];
+                i++;
+                continue;
+            }
+            let j = i+1;
+            if (s[j] === "(") {
+                let tiefe = 0;
+                let k = j;
+                for (; k < s.length; k++) {
+                    if (s[k] === "(") {
+                        tiefe++;
+                    } else if (s[k] === ")") {
+                        tiefe--;
+                        if (tiefe === 0) {
+                            break;
+                        }
+                    }
+                }
+                ergebnis += "sqrt("+s.substring(j+1, k)+")";
+                i = k+1;
+            } else {
+                let start = j;
+                while (j < s.length && /[0-9.]/.test(s[j])) {
+                    j++;
+                }
+                if (j > start) {
+                    ergebnis += "sqrt("+s.substring(start, j)+")";
+                    i = j;
+                } else {
+                    ergebnis += "sqrt(";
+                    i++;
+                }
+            }
+        }
+        return ergebnis;
+    }
+    function normalisiereKonstanten(s) {
+        if (!s) {
+            return s;
+        }
+        // π (griechischer Buchstabe) -> "pi"; ℯ (Skript-e für Eulersche Zahl) -> "e"
+        return s.replace(/π/g, "pi").replace(/ℯ/g, "e");
+    }
+    function normalisiereBetraege(s) {
+        if (!s || s.indexOf("|") === -1) {
+            return s;
+        }
+        let ergebnis = "";
+        let i = 0;
+        while (i < s.length) {
+            if (s[i] === "|") {
+                let j = i+1;
+                while (j < s.length && s[j] !== "|") {
+                    j++;
+                }
+                if (j < s.length) {
+                    ergebnis += "abs("+s.substring(i+1, j)+")";
+                    i = j+1;
+                    continue;
+                }
+            }
+            ergebnis += s[i];
+            i++;
+        }
+        return ergebnis;
+    }
+    function normalisiereDefinition(s) {
+        s = normalisiereExponenten(s);
+        s = normalisiereWurzeln(s);
+        s = normalisiereKonstanten(s);
+        s = normalisiereBetraege(s);
+        return s;
+    }
     function holeDefinition(name) {
         let definition = null;
         try {
             if (typeof ggb.getDefinitionString === "function") {
                 definition = ggb.getDefinitionString(name);
                 if (definition && typeof definition === "string") {
-                    return normalisiereExponenten(definition);
+                    return normalisiereDefinition(definition);
                 }
             }
         }catch(e) {}
@@ -331,7 +411,7 @@
             if (typeof ggb.getCommandString === "function") {
                 definition = ggb.getCommandString(name);
                 if (definition && typeof definition === "string") {
-                    return normalisiereExponenten(definition);
+                    return normalisiereDefinition(definition);
                 }
             }
         }catch(e) {}
@@ -339,7 +419,7 @@
             if (typeof ggb.getValueString === "function") {
                 definition = ggb.getValueString(name);
                 if (definition && typeof definition === "string") {
-                    return normalisiereExponenten(definition);
+                    return normalisiereDefinition(definition);
                 }
             }
         }catch(e) {}
