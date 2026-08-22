@@ -965,7 +965,54 @@
         }
         return loeseKubischArray(k[0], k[1], k[2], k[3]);
     }
-    function findeNullstellenMitGeoGebra(nenner, index) {
+    function sucheExakteForm(x) {
+        const toleranz = 1e-7;
+        if (Math.abs(x-Math.round(x)) < toleranz) {
+            return String(Math.round(x));
+        }
+        for (let nenner = 2; nenner <= 20; nenner++) {
+            const zaehler = x*nenner;
+            if (Math.abs(zaehler-Math.round(zaehler)) < toleranz*nenner) {
+                return formatBruch(Math.round(zaehler), nenner);
+            }
+        }
+        const konstanten = [
+            {
+                symbol: "π",
+                wert: Math.PI
+            },
+            {
+                symbol: "e",
+                wert: Math.E
+            }
+        ];
+        for (const k of konstanten) {
+            for (let zaehler=-12; zaehler <= 12; zaehler++) {
+                if (zaehler === 0) {
+                    continue;
+                }
+                for (let nenner = 1; nenner <= 12; nenner++) {
+                    const wert = k.wert*zaehler/nenner;
+                    if (Math.abs(x-wert) < toleranz*Math.max(1, Math.abs(wert))) {
+                        const g = ggT(Math.abs(zaehler), nenner) || 1;
+                        const z = zaehler/g;
+                        const n = nenner/g;
+                        let vorfaktor;
+                        if (z === 1) {
+                            vorfaktor = "";
+                        } else if (z===-1) {
+                            vorfaktor = "-";
+                        } else {
+                            vorfaktor = String(z);
+                        }
+                        return n === 1?vorfaktor+k.symbol: vorfaktor+k.symbol+"/"+n;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+    function findeNullstellenMitGeoGebra(nenner, index, exakteFormen) {
         const ergebnis = [];
         const tempName = "ggbLueckenNenner"+index+"_"+Date.now();
         const befehl = tempName+"(x)="+nenner;
@@ -980,17 +1027,27 @@
             let xLetzte = null;
             let yLetzte = null;
             let treffer = 0;
+            const merken = function(x) {
+                if (exakteFormen) {
+                    const form = sucheExakteForm(x);
+                    if (form) {
+                        merkeExakteForm(exakteFormen, x, form);
+                    }
+                }
+            };
             for (let x=-grenze; x <= grenze+1e-9; x += schritt) {
                 const y = wertBei(tempName, x);
                 if (isFinite(y)) {
                     if (xLetzte !== null && isFinite(yLetzte)) {
                         if (yLetzte === 0) {
                             ergebnis.push(xLetzte);
+                            merken(xLetzte);
                         } else if ((yLetzte < 0 && y > 0) || (yLetzte > 0 && y < 0)) {
                             const wurzel = grenzeMitRoot(tempName, xLetzte, x, index, treffer);
                             treffer++;
                             if (wurzel !== null) {
                                 ergebnis.push(wurzel);
+                                merken(wurzel);
                             }
                         }
                     }
@@ -1100,7 +1157,7 @@
                 teilergebnis = hoehereNullstellen(faktor);
             }
             if (teilergebnis.length === 0) {
-                teilergebnis = findeNullstellenMitGeoGebra(entferneAussenklammern(faktor), index+"_"+i);
+                teilergebnis = findeNullstellenMitGeoGebra(entferneAussenklammern(faktor), index+"_"+i, exakteFormen);
             }
             ergebnis = ergebnis.concat(teilergebnis);
         }
@@ -1132,7 +1189,17 @@
         }catch(e) {}
         const xAnzeige = Math.round(x*1000000)/1000000;
         const exakterText = exakteFormen && exakteFormen.get(x.toFixed(6));
-        const xBeschriftung = exakterText?"x = "+exakterText+" (≈ "+xAnzeige+")": "x = "+xAnzeige;
+        let xBeschriftung;
+        if (exakterText) {
+            const istReineGanzzahl = /^-?\d+$/.test(exakterText);
+            if (istReineGanzzahl && Number(exakterText) === xAnzeige) {
+                xBeschriftung = "x = "+exakterText;
+            } else {
+                xBeschriftung = "x = "+exakterText+" (≈ "+xAnzeige+")";
+            }
+        } else {
+            xBeschriftung = "x = "+xAnzeige;
+        }
         try {
             ggb.setCaption(pointName, "Definitionslücke "+xBeschriftung);
             ggb.setLabelStyle(pointName, 3);
