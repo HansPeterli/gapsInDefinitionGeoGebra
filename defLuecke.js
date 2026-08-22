@@ -2,7 +2,7 @@
 // @name         GeoGebra Definitionslücken
 // @namespace    https://github.com/HansPeterli/gapsInDefinitionGeoGebra
 // @version      1.0
-// @description  Erkennt und zeigt hebbare Definitionslücken von Funktionen in GeoGebra automatisch an.
+// @description  Erkennt und zeigt Definitionslücken (hebbare Unstetigkeiten) von Funktionen in GeoGebra automatisch an.
 // @author       HansPeterli
 // @match        https://www.geogebra.org/classic*
 // @grant        none
@@ -364,11 +364,28 @@
         if (!s) {
             return s;
         }
-        // π (griechischer Buchstabe) -> "pi"; ℯ (Skript-e für Eulersche Zahl) -> "e"
-        return s.replace(/π/g, "pi").replace(/ℯ/g, "e");
+        // π (griechischer Buchstabe) -> "pi"; verschiedene Unicode-Varianten von "e"
+        // (z.B. Skript- oder Kursiv-e für die Eulersche Zahl) -> "e". Da GeoGebra
+        // je nach Version/Plattform unterschiedliche Zeichen nutzen kann, fangen wir
+        // zusätzlich per Unicode-Normalisierung (NFKC) generische "Buchstaben-Varianten"
+        // ab (z.B. mathematisch-kursive Buchstaben), die sich sonst leicht der reinen
+        // String-Ersetzung entziehen.
+        s = s.replace(/π/g, "pi").replace(/[ℯⅇ]/g, "e");
+        if (typeof s.normalize === "function") {
+            try {
+                s = s.normalize("NFKC");
+            }catch(e) {}
+        }
+        return s;
     }
     function normalisiereBetraege(s) {
-        if (!s || s.indexOf("|") === -1) {
+        if (!s) {
+            return s;
+        }
+        // Manche GeoGebra-Versionen nutzen statt des einfachen Tastatur-Strichs "|"
+        // das mathematische "Teilt"-Zeichen "∣" für Betragsstriche.
+        s = s.replace(/∣/g, "|");
+        if (s.indexOf("|") === -1) {
             return s;
         }
         let ergebnis = "";
@@ -391,10 +408,15 @@
         return ergebnis;
     }
     function normalisiereDefinition(s) {
+        if (!s) {
+            return s;
+        }
+        console.log("[Lücken] Rohdefinition:", s);
         s = normalisiereExponenten(s);
         s = normalisiereWurzeln(s);
         s = normalisiereKonstanten(s);
         s = normalisiereBetraege(s);
+        console.log("[Lücken] Normalisiert:", s);
         return s;
     }
     function holeDefinition(name) {
@@ -540,13 +562,19 @@
         }
         return nenner;
     }
+    function istBezeichnerZeichen(ch) {
+        return /[A-Za-z0-9_]/.test(ch);
+    }
     function extrahiereFaktoren(ausdruck) {
         let s = ausdruck.replace(/\s/g, "");
         s = entferneAussenklammern(s);
         const faktoren = [];
         let i = 0;
         while (i < s.length) {
-            if (s[i] === "(") {
+            // Nur "echte" Gruppierungsklammern als eigenen Faktor behandeln - nicht die
+            // Klammern eines Funktionsaufrufs wie abs(...), sqrt(...) etc. Eine Klammer
+            // gehört zu einem Funktionsaufruf, wenn direkt davor ein Bezeichner-Zeichen steht.
+            if (s[i] === "(" && !(i > 0 && istBezeichnerZeichen(s[i-1]))) {
                 let tiefe = 0;
                 let ende=-1;
                 for (let j = i; j < s.length; j++) {
@@ -943,6 +971,7 @@
         try {
             ggb.evalCommand(tempName+"(x)="+nenner);
             if (!ggb.exists(tempName)) {
+                console.warn("[Lücken] Konnte Hilfsfunktion nicht erzeugen für:", nenner);
                 return ergebnis;
             }
             const grenze = 100;
@@ -971,7 +1000,9 @@
                     yLetzte = null;
                 }
             }
-        }catch(e) {}
+        }catch(e) {
+            console.warn("[Lücken] Fehler beim Auswerten von:", nenner, e);
+        }
         try {
             ggb.deleteObject(tempName);
         }catch(e) {}
