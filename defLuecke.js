@@ -4,7 +4,7 @@
 // @version      1.0
 // @description  Erkennt und zeigt Definitionslücken (hebbare Unstetigkeiten) von Funktionen in GeoGebra automatisch an.
 // @author       HansPeterli
-// @match        https://www.geogebra.org/classic*
+// @match        https://www.geogebra.org/*
 // @grant        none
 // ==/UserScript==
 
