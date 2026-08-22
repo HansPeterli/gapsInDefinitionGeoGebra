@@ -968,10 +968,11 @@
     function findeNullstellenMitGeoGebra(nenner, index) {
         const ergebnis = [];
         const tempName = "__LueckenNenner_"+index+"_"+Date.now();
+        const befehl = tempName+"(x)="+nenner;
         try {
-            ggb.evalCommand(tempName+"(x)="+nenner);
-            if (!ggb.exists(tempName)) {
-                console.warn("[Lücken] Konnte Hilfsfunktion nicht erzeugen für:", nenner);
+            const erfolg = ggb.evalCommand(befehl);
+            if (!erfolg || !ggb.exists(tempName)) {
+                console.warn("[Lücken] Konnte Hilfsfunktion nicht erzeugen. Befehl:", befehl, "| evalCommand-Ergebnis:", erfolg, "| exists:", ggb.exists(tempName));
                 return ergebnis;
             }
             const grenze = 100;
@@ -1001,7 +1002,7 @@
                 }
             }
         }catch(e) {
-            console.warn("[Lücken] Fehler beim Auswerten von:", nenner, e);
+            console.warn("[Lücken] Fehler beim Auswerten. Befehl:", befehl, "| Fehler:", e);
         }
         try {
             ggb.deleteObject(tempName);
@@ -1099,7 +1100,7 @@
                 teilergebnis = hoehereNullstellen(faktor);
             }
             if (teilergebnis.length === 0) {
-                teilergebnis = findeNullstellenMitGeoGebra(faktor, index+"_"+i);
+                teilergebnis = findeNullstellenMitGeoGebra(entferneAussenklammern(faktor), index+"_"+i);
             }
             ergebnis = ergebnis.concat(teilergebnis);
         }
