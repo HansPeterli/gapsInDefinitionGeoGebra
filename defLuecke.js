@@ -334,6 +334,18 @@
         });
         return signatur;
     }
+    const debounceTimer = new Map();
+    function planeAktualisierung(name, verzoegerung) {
+        if (debounceTimer.has(name)) {
+            clearTimeout(debounceTimer.get(name));
+        }
+        const timer = setTimeout(function() {
+            debounceTimer.delete(name);
+            aktualisiereFunktion(name);
+            aktualisiereLueckenSichtbarkeit(name);
+        }, verzoegerung);
+        debounceTimer.set(name, timer);
+    }
     function pruefeFunktionAufAenderung(name) {
         const definition = holeDefinition(name);
         if (!definition) {
@@ -343,21 +355,16 @@
         if (!bekannteDefinitionen.has(name)) {
             console.log("[Lücken] Neue Funktion:", name);
             bekannteDefinitionen.set(name, signatur);
-            setTimeout(function() {
-                aktualisiereFunktion(name);
-                aktualisiereLueckenSichtbarkeit(name);
-            }, 0);
+            planeAktualisierung(name, 0);
             return;
         }
         const alteSignatur = bekannteDefinitionen.get(name);
         if (alteSignatur !== signatur) {
-            console.log("[Lücken] Funktion oder abhängige Variable geändert:", name);
             bekannteDefinitionen.set(name, signatur);
-            loescheLueckenPunkte(name);
-            setTimeout(function() {
-                aktualisiereFunktion(name);
-                aktualisiereLueckenSichtbarkeit(name);
-            }, 0);
+            // Kurzes Debounce (statt sofort löschen+neu anlegen): sammelt viele
+            // schnell aufeinanderfolgende Events (z.B. beim Ziehen eines
+            // Schiebereglers) zu einer einzigen, günstigeren Aktualisierung.
+            planeAktualisierung(name, 60);
         }
     }
     const HOCHZAHLEN = {
@@ -517,27 +524,22 @@
         return null;
     }
     function loescheLueckenPunkte(name) {
-        console.log("[Lücken] Lösche alte Punkte für:", name);
-        try {
-            const anzahl = ggb.getObjectNumber();
-            const loeschen = [];
-            for (let i = 0; i < anzahl; i++) {
-                const objektName = ggb.getObjectName(i);
-                if (!objektName) {
-                    continue;
-                }
-                if (objektName.startsWith("Luecke_"+name+"_")) {
-                    loeschen.push(objektName);
-                }
+        let i = 1;
+        while (true) {
+            const pointName = "Luecke_"+name+"_"+i;
+            let vorhanden = false;
+            try {
+                vorhanden = ggb.exists(pointName);
+            }catch(e) {
+                vorhanden = false;
             }
-            for (const objektName of loeschen) {
-                try {
-                    ggb.deleteObject(objektName);
-                    console.log("[Lücken] Gelöscht:", objektName);
-                }catch(e) {}
+            if (!vorhanden) {
+                break;
             }
-        }catch(e) {
-            console.error("[Lücken] Fehler beim Löschen:", e);
+            try {
+                ggb.deleteObject(pointName);
+            }catch(e) {}
+            i++;
         }
     }
     function entferneAussenklammern(s) {
@@ -1211,6 +1213,78 @@
         }catch(e) {}
         return x;
     }
+    function sucheLineareFormel(faktorRoh) {
+        const s = entferneAussenklammern(faktorRoh.replace(/\s/g, ""));
+        let m = s.match(/^x([+-])([A-Za-zÀ-ÖØ-öø-ÿ_][A-Za-zÀ-ÖØ-öø-ÿ0-9_]*)$/);
+        if (m && !RESERVIERTE_BEZEICHNER.has(m[2])) {
+            return m[1]==="-"?m[2]: "-"+m[2];
+        }
+        m = s.match(/^([A-Za-zÀ-ÖØ-öø-ÿ_][A-Za-zÀ-ÖØ-öø-ÿ0-9_]*)([+-])x$/);
+        if (m && !RESERVIERTE_BEZEICHNER.has(m[1])) {
+            return m[2]==="-"?m[1]: "-"+m[1];
+        }
+        return null;
+    }
+    function versucheAllgemeineFormel(faktorRoh, name, listenName) {
+        const variablen = extrahiereAbhaengigeVariablen(faktorRoh, name);
+        if (variablen.size === 0) {
+            return null;
+        }
+        try {
+            if (ggb.exists(listenName)) {
+                ggb.deleteObject(listenName);
+            }
+        }catch(e) {}
+        let erfolg = false;
+        try {
+            erfolg = ggb.evalCommand(listenName+" = Solutions("+faktorRoh+"=0, x)");
+        }catch(e) {
+            erfolg = false;
+        }
+        if (!erfolg || !ggb.exists(listenName)) {
+            try {
+                ggb.deleteObject(listenName);
+            }catch(e) {}
+            return null;
+        }
+        try {
+            ggb.setAuxiliary(listenName, true);
+            ggb.setVisible(listenName, false);
+        }catch(e) {}
+        let anzahl = 0;
+        try {
+            anzahl = ggb.getValue("Length("+listenName+")");
+        }catch(e) {
+            anzahl = 0;
+        }
+        if (!isFinite(anzahl) || anzahl <= 0 || anzahl > 20) {
+            try {
+                ggb.deleteObject(listenName);
+            }catch(e) {}
+            return null;
+        }
+        const ergebnisse = [];
+        for (let k = 1; k <= anzahl; k++) {
+            const formelText = "Element("+listenName+","+k+")";
+            let xWert = NaN;
+            try {
+                xWert = ggb.getValue(formelText);
+            }catch(e) {}
+            if (isFinite(xWert)) {
+                ergebnisse.push({
+                    x: xWert,
+                    formel: formelText
+                });
+            }
+        }
+        if (ergebnisse.length === 0) {
+            try {
+                ggb.deleteObject(listenName);
+            }catch(e) {}
+            return null;
+        }
+        return ergebnisse;
+    }
     function entferneDoppelte(werte) {
         const sauber = [];
         for (const x of werte) {
@@ -1289,17 +1363,30 @@
         }
         return entferneDoppelte(ergebnis);
     }
-    function erzeugeLueckenPunkt(name, nummer, x, y, exakteFormen) {
+    function erzeugeLueckenPunkt(name, nummer, x, y, exakteFormen, formel) {
         const pointName = "Luecke_"+name+"_"+nummer;
         try {
             if (ggb.exists(pointName)) {
                 ggb.deleteObject(pointName);
             }
         }catch(e) {}
-        try {
-            ggb.evalCommand(pointName+" = ("+x+", "+y+")");
-        }catch(e) {
-            return false;
+        let erfolgreichAlsFormel = false;
+        if (formel) {
+            try {
+                const befehl = pointName+" = ("+formel+", Limit("+name+"(x), x, "+formel+"))";
+                const erfolg = ggb.evalCommand(befehl);
+                if (erfolg && ggb.exists(pointName)) {
+                    erfolgreichAlsFormel = true;
+                    console.log("[Lücken] Punkt als lebendige Formel erstellt:", befehl);
+                }
+            }catch(e) {}
+        }
+        if (!erfolgreichAlsFormel) {
+            try {
+                ggb.evalCommand(pointName+" = ("+x+", "+y+")");
+            }catch(e) {
+                return false;
+            }
         }
         if (!ggb.exists(pointName)) {
             return false;
@@ -1349,23 +1436,74 @@
         busy = true;
         try {
             console.log("[Lücken] Analysiere neu:", name);
-            let definition = holeDefinition(name);
-            if (!definition) {
+            const definitionRoh = holeDefinition(name);
+            if (!definitionRoh) {
                 loescheSteuerobjekt(name);
+                loescheLueckenPunkte(name);
                 return;
             }
-            definition = ersetzeVariablenDurchWerte(definition, name);
+            const definition = ersetzeVariablenDurchWerte(definitionRoh, name);
             console.log("[Lücken] Nach Variablen-Einsetzung:", definition);
+            const nennerRoh = findeNenner(definitionRoh);
             const nenner = findeNenner(definition);
             if (nenner.length === 0) {
                 console.log("[Lücken] Kein Nenner.");
                 loescheSteuerobjekt(name);
+                loescheLueckenPunkte(name);
                 return;
             }
             let kandidaten = [];
+            const formelZuX = new Map();
             const exakteFormen = new Map();
+            const verwendeteListen = new Set();
             for (let i = 0; i < nenner.length; i++) {
-                kandidaten = kandidaten.concat(findeNullstellen(nenner[i], i, exakteFormen));
+                const faktorenRoh = nennerRoh[i]?extrahiereFaktoren(nennerRoh[i]): [];
+                const faktorenSub = extrahiereFaktoren(nenner[i]);
+                for (let j = 0; j < faktorenSub.length; j++) {
+                    const faktorRoh = faktorenRoh[j];
+                    // Stufe 1: einfaches Muster (x-a, a-x, ...) - schnell, ohne CAS-Aufruf.
+                    const einfacheFormel = faktorRoh?sucheLineareFormel(faktorRoh): null;
+                    if (einfacheFormel) {
+                        const teilergebnis = findeNullstellen(faktorenSub[j], i+"_"+j, exakteFormen);
+                        for (const x of teilergebnis) {
+                            kandidaten.push(x);
+                            formelZuX.set(x.toFixed(6), einfacheFormel);
+                        }
+                        continue;
+                    }
+                    // Stufe 2: allgemeiner Fall mit Variable(n) - GeoGebras eigenes
+                    // Solutions()-CAS-Kommando übernimmt das Auflösen. Deckt auch
+                    // kompliziertere Faktoren mit Beträgen, Wurzeln usw. ab.
+                    const listenName = "LoesListe_"+name+"_"+i+"_"+j;
+                    const allgemein = faktorRoh?versucheAllgemeineFormel(faktorRoh, name, listenName): null;
+                    if (allgemein) {
+                        verwendeteListen.add(listenName);
+                        for (const eintrag of allgemein) {
+                            kandidaten.push(eintrag.x);
+                            formelZuX.set(eintrag.x.toFixed(6), eintrag.formel);
+                        }
+                        continue;
+                    }
+                    // Stufe 3: Fallback - rein numerisch (z.B. wenn Solutions()
+                    // scheitert, oder keine Variable im Faktor vorkommt).
+                    const teilergebnis = findeNullstellen(faktorenSub[j], i+"_"+j, exakteFormen);
+                    kandidaten = kandidaten.concat(teilergebnis);
+                }
+            }
+            // Verwaiste Lösungslisten von früheren Analysen entfernen (z.B. wenn
+            // sich die Anzahl der Faktoren durch eine Bearbeitung geändert hat).
+            for (let i = 0; i < 10; i++) {
+                for (let j = 0; j < 10; j++) {
+                    const kandidatName = "LoesListe_"+name+"_"+i+"_"+j;
+                    if (verwendeteListen.has(kandidatName)) {
+                        continue;
+                    }
+                    try {
+                        if (ggb.exists(kandidatName)) {
+                            ggb.deleteObject(kandidatName);
+                        }
+                    }catch(e) {}
+                }
             }
             kandidaten = entferneDoppelte(kandidaten);
             console.log("[Lücken] Kandidaten:", kandidaten);
@@ -1375,7 +1513,8 @@
                 if (y !== null) {
                     luecken.push({
                         x: x,
-                        y: y
+                        y: y,
+                        formel: formelZuX.get(x.toFixed(6))||null
                     });
                 }
             }
@@ -1386,8 +1525,28 @@
             }
             let counter = 1;
             for (const luecke of luecken) {
-                erzeugeLueckenPunkt(name, counter, luecke.x, luecke.y, exakteFormen);
+                erzeugeLueckenPunkt(name, counter, luecke.x, luecke.y, exakteFormen, luecke.formel);
                 counter++;
+            }
+            // Übrig gebliebene Punkte von einer früheren Berechnung mit mehr
+            // Lücken entfernen (z.B. wenn sich eine Variable so ändert, dass
+            // aus 2 Lücken nur noch 1 wird).
+            let ueberzaehligerIndex = counter;
+            while (true) {
+                const punktName = "Luecke_"+name+"_"+ueberzaehligerIndex;
+                let vorhanden = false;
+                try {
+                    vorhanden = ggb.exists(punktName);
+                }catch(e) {
+                    vorhanden = false;
+                }
+                if (!vorhanden) {
+                    break;
+                }
+                try {
+                    ggb.deleteObject(punktName);
+                }catch(e) {}
+                ueberzaehligerIndex++;
             }
             aktualisiereLueckenSichtbarkeit(name);
             console.log("[Lücken] Neue Lücken:", luecken);
