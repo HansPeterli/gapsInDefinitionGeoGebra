@@ -487,12 +487,10 @@
         if (!s) {
             return s;
         }
-        console.log("[Lücken] Rohdefinition:", s);
         s = normalisiereExponenten(s);
         s = normalisiereWurzeln(s);
         s = normalisiereKonstanten(s);
         s = normalisiereBetraege(s);
-        console.log("[Lücken] Normalisiert:", s);
         return s;
     }
     function holeDefinition(name) {
@@ -1443,7 +1441,6 @@
                 return;
             }
             const definition = ersetzeVariablenDurchWerte(definitionRoh, name);
-            console.log("[Lücken] Nach Variablen-Einsetzung:", definition);
             const nennerRoh = findeNenner(definitionRoh);
             const nenner = findeNenner(definition);
             if (nenner.length === 0) {
