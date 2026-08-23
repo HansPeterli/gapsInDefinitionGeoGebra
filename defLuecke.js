@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GeoGebra Definitionslücken
 // @namespace    https://github.com/HansPeterli/gapsInDefinitionGeoGebra
-// @version      27.0
+// @version      1.0
 // @description  Erkennt und zeigt Definitionslücken (hebbare Unstetigkeiten) von Funktionen in GeoGebra automatisch an.
 // @author       HansPeterli
 // @match        https://www.geogebra.org/classic*
@@ -535,10 +535,7 @@
             return[];
         }
         const gleich = definition.indexOf("=");
-        if (gleich===-1) {
-            return[];
-        }
-        const ausdruck = definition.substring(gleich+1);
+        const ausdruck = gleich===-1?definition: definition.substring(gleich+1);
         const nenner = [];
         for (let i = 0; i < ausdruck.length; i++) {
             if (ausdruck[i] !== "/") {
