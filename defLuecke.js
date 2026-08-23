@@ -287,6 +287,41 @@
         }
         return gefunden;
     }
+    function vereinfacheEingesetzteWerte(s) {
+        let vorher;
+        do {
+            vorher = s;
+            s = s.replace(/\+\s*\(\s*-([0-9.]+)\s*\)/g, "-$1");
+            s = s.replace(/-\s*\(\s*-([0-9.]+)\s*\)/g, "+$1");
+            s = s.replace(/\+\s*\(\s*([0-9.]+)\s*\)/g, "+$1");
+            s = s.replace(/-\s*\(\s*([0-9.]+)\s*\)/g, "-$1");
+            s = s.replace(/\(\s*-([0-9.]+)\s*\)/g, "-$1");
+            s = s.replace(/\(\s*([0-9.]+)\s*\)/g, "$1");
+        }while (s !== vorher);
+        return s;
+    }
+    function ersetzeVariablenDurchWerte(definition, eigenerName) {
+        if (!definition) {
+            return definition;
+        }
+        const regex = /[A-Za-zÀ-ÖØ-öø-ÿ_][A-Za-zÀ-ÖØ-öø-ÿ0-9_]*/g;
+        let ersetzt = definition.replace(regex, function(wort) {
+            if (wort === eigenerName || RESERVIERTE_BEZEICHNER.has(wort)) {
+                return wort;
+            }
+            try {
+                if (ggb.exists(wort) && istFunktionsTyp(wort) === false) {
+                    const wert = ggb.getValue(wort);
+                    if (isFinite(wert)) {
+                        const gerundet = Math.round(wert*1e9)/1e9;
+                        return "("+gerundet+")";
+                    }
+                }
+            }catch(e) {}
+            return wort;
+        });
+        return vereinfacheEingesetzteWerte(ersetzt);
+    }
     function berechneSignatur(name, definition) {
         let signatur = definition;
         const variablen = extrahiereAbhaengigeVariablen(definition, name);
@@ -1314,11 +1349,13 @@
         busy = true;
         try {
             console.log("[Lücken] Analysiere neu:", name);
-            const definition = holeDefinition(name);
+            let definition = holeDefinition(name);
             if (!definition) {
                 loescheSteuerobjekt(name);
                 return;
             }
+            definition = ersetzeVariablenDurchWerte(definition, name);
+            console.log("[Lücken] Nach Variablen-Einsetzung:", definition);
             const nenner = findeNenner(definition);
             if (nenner.length === 0) {
                 console.log("[Lücken] Kein Nenner.");
