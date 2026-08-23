@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         GeoGebra Definitionslücken
 // @namespace    https://github.com/HansPeterli/gapsInDefinitionGeoGebra
-// @version      1.0
+// @version      27.0
 // @description  Erkennt und zeigt Definitionslücken (hebbare Unstetigkeiten) von Funktionen in GeoGebra automatisch an.
 // @author       HansPeterli
-// @match        https://www.geogebra.org/*
+// @match        https://www.geogebra.org/classic*
 // @grant        none
 // ==/UserScript==
 
@@ -181,6 +181,16 @@
         }
         registriereSteuerListener(funktionsName);
     }
+    function loescheSteuerobjekt(funktionsName) {
+        const steuerName = steuerObjektName(funktionsName);
+        try {
+            if (ggb.exists(steuerName)) {
+                ggb.deleteObject(steuerName);
+                console.log("[Lücken] Steuerobjekt entfernt (keine Lücken mehr):", steuerName);
+            }
+        }catch(e) {}
+        registrierteSteuerListener.delete(steuerName);
+    }
     function steuerungAktiv(funktionsName) {
         const steuerName = steuerObjektName(funktionsName);
         try {
@@ -263,27 +273,51 @@
             console.error("[Lücken] Fehler:", e);
         }
     }
+    const RESERVIERTE_BEZEICHNER = new Set(["x", "pi", "e", "sqrt", "abs"]);
+    function extrahiereAbhaengigeVariablen(definition, eigenerName) {
+        const gefunden = new Set();
+        const regex = /[A-Za-zÀ-ÖØ-öø-ÿ_][A-Za-zÀ-ÖØ-öø-ÿ0-9_]*/g;
+        let treffer;
+        while ((treffer = regex.exec(definition)) !== null) {
+            const wort = treffer[0];
+            if (wort === eigenerName || RESERVIERTE_BEZEICHNER.has(wort)) {
+                continue;
+            }
+            gefunden.add(wort);
+        }
+        return gefunden;
+    }
+    function berechneSignatur(name, definition) {
+        let signatur = definition;
+        const variablen = extrahiereAbhaengigeVariablen(definition, name);
+        variablen.forEach(function(v) {
+            try {
+                if (ggb.exists(v)) {
+                    signatur += "|"+v+"="+ggb.getValue(v);
+                }
+            }catch(e) {}
+        });
+        return signatur;
+    }
     function pruefeFunktionAufAenderung(name) {
         const definition = holeDefinition(name);
         if (!definition) {
             return;
         }
+        const signatur = berechneSignatur(name, definition);
         if (!bekannteDefinitionen.has(name)) {
             console.log("[Lücken] Neue Funktion:", name);
-            bekannteDefinitionen.set(name, definition);
-            erstelleSteuerobjekt(name);
+            bekannteDefinitionen.set(name, signatur);
             setTimeout(function() {
                 aktualisiereFunktion(name);
                 aktualisiereLueckenSichtbarkeit(name);
             }, 100);
             return;
         }
-        const alteDefinition = bekannteDefinitionen.get(name);
-        if (alteDefinition !== definition) {
-            console.log("[Lücken] Funktion geändert:", name);
-            console.log("[Lücken] Alt:", alteDefinition);
-            console.log("[Lücken] Neu:", definition);
-            bekannteDefinitionen.set(name, definition);
+        const alteSignatur = bekannteDefinitionen.get(name);
+        if (alteSignatur !== signatur) {
+            console.log("[Lücken] Funktion oder abhängige Variable geändert:", name);
+            bekannteDefinitionen.set(name, signatur);
             loescheLueckenPunkte(name);
             setTimeout(function() {
                 aktualisiereFunktion(name);
@@ -965,6 +999,34 @@
         }
         return loeseKubischArray(k[0], k[1], k[2], k[3]);
     }
+    function baueWurzelText(a, c, kern, vorzeichen) {
+        const wurzelBasis = (c===1?"":String(c))+"√"+kern;
+        if (a === 0) {
+            return vorzeichen<0?"-"+wurzelBasis: wurzelBasis;
+        }
+        return a+(vorzeichen<0?" - ":" + ")+wurzelBasis;
+    }
+    function sucheWurzelForm(x) {
+        const toleranz = 1e-7;
+        for (let kern = 2; kern <= 100; kern++) {
+            const w = Math.sqrt(kern);
+            const wr = Math.round(w);
+            if (wr*wr === kern) {
+                continue;
+            }
+            for (let c = 1; c <= 10; c++) {
+                for (let a = -30; a <= 30; a++) {
+                    if (Math.abs(x-(a+c*w)) < toleranz) {
+                        return baueWurzelText(a, c, kern, 1);
+                    }
+                    if (Math.abs(x-(a-c*w)) < toleranz) {
+                        return baueWurzelText(a, c, kern, -1);
+                    }
+                }
+            }
+        }
+        return null;
+    }
     function sucheExakteForm(x) {
         const toleranz = 1e-7;
         if (Math.abs(x-Math.round(x)) < toleranz) {
@@ -1009,6 +1071,10 @@
                     }
                 }
             }
+        }
+        const wurzelForm = sucheWurzelForm(x);
+        if (wurzelForm) {
+            return wurzelForm;
         }
         return null;
     }
@@ -1187,6 +1253,9 @@
         try {
             ggb.setColor(pointName, 0, 0, 0);
         }catch(e) {}
+        try {
+            ggb.setFixed(pointName, true);
+        }catch(e) {}
         const xAnzeige = Math.round(x*1000000)/1000000;
         const exakterText = exakteFormen && exakteFormen.get(x.toFixed(6));
         let xBeschriftung;
@@ -1222,11 +1291,13 @@
             console.log("[Lücken] Analysiere neu:", name);
             const definition = holeDefinition(name);
             if (!definition) {
+                loescheSteuerobjekt(name);
                 return;
             }
             const nenner = findeNenner(definition);
             if (nenner.length === 0) {
                 console.log("[Lücken] Kein Nenner.");
+                loescheSteuerobjekt(name);
                 return;
             }
             let kandidaten = [];
@@ -1245,6 +1316,11 @@
                         y: y
                     });
                 }
+            }
+            if (luecken.length > 0) {
+                erstelleSteuerobjekt(name);
+            } else {
+                loescheSteuerobjekt(name);
             }
             let counter = 1;
             for (const luecke of luecken) {
