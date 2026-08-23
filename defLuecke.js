@@ -356,6 +356,15 @@
             console.log("[Lücken] Neue Funktion:", name);
             bekannteDefinitionen.set(name, signatur);
             planeAktualisierung(name, 0);
+            // Sicherheits-Nachprüfung: GeoGebras CAS-Engine (für Solutions())
+            // ist direkt nach dem Laden manchmal noch nicht vollständig bereit,
+            // daher hier unabhängig vom Debounce noch ein zweiter Check etwas
+            // später, damit Lücken nicht erst nach einer manuellen Änderung
+            // (z.B. Schieberegler bewegen) korrekt erkannt werden.
+            setTimeout(function() {
+                aktualisiereFunktion(name);
+                aktualisiereLueckenSichtbarkeit(name);
+            }, 1000);
             return;
         }
         const alteSignatur = bekannteDefinitionen.get(name);
@@ -1128,34 +1137,6 @@
                     }
                 }
             };
-            // Schnelltest: ist der Ausdruck linear in x (auch mit Variablen als
-            // Koeffizient, z.B. "x-a")? Dann reichen 3 Auswertungen statt eines
-            // Scans über 400 Punkte - deutlich schneller, wichtig für flüssige
-            // Reaktion bei Schiebereglern.
-            const y0 = wertBei(tempName, 0);
-            const y1 = wertBei(tempName, 1);
-            const y2 = wertBei(tempName, 2);
-            if (isFinite(y0) && isFinite(y1) && isFinite(y2)) {
-                const steigung1 = y1-y0;
-                const steigung2 = y2-y1;
-                if (Math.abs(steigung1-steigung2) < 1e-9*Math.max(1, Math.abs(steigung1))) {
-                    if (Math.abs(steigung1) > 1e-12) {
-                        const wurzel = -y0/steigung1;
-                        ergebnis.push(wurzel);
-                        merken(wurzel);
-                        try {
-                            ggb.deleteObject(tempName);
-                        }catch(e) {}
-                        return ergebnis;
-                    } else if (Math.abs(y0) < 1e-9) {
-                        // konstant Null -> keine isolierte Nullstelle, ganze Zeile - ignorieren
-                        try {
-                            ggb.deleteObject(tempName);
-                        }catch(e) {}
-                        return ergebnis;
-                    }
-                }
-            }
             const grenze = 100;
             const schritt = 0.5;
             let xLetzte = null;
