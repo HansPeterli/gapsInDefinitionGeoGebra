@@ -13,7 +13,7 @@
     let ggb = null;
     let bekannteDefinitionen = new Map();
     let bekannteSteuerwerte = new Map();
-    let busy = false;
+    const busySet = new Set();
     function istFunktionsTyp(name) {
         try {
             const type = ggb.getObjectType(name);
@@ -215,23 +215,26 @@
     }
     function aktualisiereLueckenSichtbarkeit(funktionsName) {
         const sichtbar = sollLueckeSichtbarSein(funktionsName);
-        const prefix = "Luecke_"+funktionsName+"_";
-        try {
-            const anzahl = ggb.getObjectNumber();
-            for (let i = 0; i < anzahl; i++) {
-                const objektName = ggb.getObjectName(i);
-                if (objektName && objektName.startsWith(prefix)) {
-                    try {
-                        ggb.setVisible(objektName, sichtbar);
-                    }catch(e) {}
-                }
+        let i = 1;
+        while (true) {
+            const punktName = "Luecke_"+funktionsName+"_"+i;
+            let vorhanden = false;
+            try {
+                vorhanden = ggb.exists(punktName);
+            }catch(e) {
+                vorhanden = false;
             }
-        }catch(e) {
-            console.error("[Lücken] Fehler bei Sichtbarkeit:", e);
+            if (!vorhanden) {
+                break;
+            }
+            try {
+                ggb.setVisible(punktName, sichtbar);
+            }catch(e) {}
+            i++;
         }
     }
     function pruefeAlleFunktionen() {
-        if (!ggb || busy) {
+        if (!ggb) {
             return;
         }
         try {
@@ -1204,32 +1207,50 @@
         }
         return null;
     }
+    const listenQuelltext = new Map();
     function versucheAllgemeineFormel(faktorRoh, name, listenName) {
         const variablen = extrahiereAbhaengigeVariablen(faktorRoh, name);
         if (variablen.size === 0) {
             return null;
         }
-        try {
-            if (ggb.exists(listenName)) {
-                ggb.deleteObject(listenName);
-            }
-        }catch(e) {}
-        let erfolg = false;
-        try {
-            erfolg = ggb.evalCommand(listenName+" = Solutions("+faktorRoh+"=0, x)");
-        }catch(e) {
-            erfolg = false;
-        }
-        if (!erfolg || !ggb.exists(listenName)) {
+        const existiertSchon = (function() {
             try {
-                ggb.deleteObject(listenName);
+                return ggb.exists(listenName);
+            }catch(e) {
+                return false;
+            }
+        })();
+        const gleicheQuelle = listenQuelltext.get(listenName) === faktorRoh;
+        if (!existiertSchon || !gleicheQuelle) {
+            // Nur neu per (langsamem) CAS-Solutions()-Aufruf berechnen, wenn die
+            // Liste noch nicht existiert oder sich der Faktor-Text strukturell
+            // geändert hat. Bei reinen Wertänderungen (z.B. Regler bewegen) bleibt
+            // die bestehende, bereits "lebendige" Liste unverändert bestehen - sie
+            // aktualisiert sich über GeoGebras eigene Abhängigkeiten von selbst.
+            try {
+                if (existiertSchon) {
+                    ggb.deleteObject(listenName);
+                }
             }catch(e) {}
-            return null;
+            let erfolg = false;
+            try {
+                erfolg = ggb.evalCommand(listenName+" = Solutions("+faktorRoh+"=0, x)");
+            }catch(e) {
+                erfolg = false;
+            }
+            if (!erfolg || !ggb.exists(listenName)) {
+                try {
+                    ggb.deleteObject(listenName);
+                }catch(e) {}
+                listenQuelltext.delete(listenName);
+                return null;
+            }
+            listenQuelltext.set(listenName, faktorRoh);
+            try {
+                ggb.setAuxiliary(listenName, true);
+                ggb.setVisible(listenName, false);
+            }catch(e) {}
         }
-        try {
-            ggb.setAuxiliary(listenName, true);
-            ggb.setVisible(listenName, false);
-        }catch(e) {}
         let anzahl = 0;
         try {
             anzahl = ggb.getValue("Length("+listenName+")");
@@ -1240,6 +1261,7 @@
             try {
                 ggb.deleteObject(listenName);
             }catch(e) {}
+            listenQuelltext.delete(listenName);
             return null;
         }
         const ergebnisse = [];
@@ -1260,6 +1282,7 @@
             try {
                 ggb.deleteObject(listenName);
             }catch(e) {}
+            listenQuelltext.delete(listenName);
             return null;
         }
         return ergebnisse;
@@ -1409,10 +1432,10 @@
         return true;
     }
     function aktualisiereFunktion(name) {
-        if (busy) {
+        if (busySet.has(name)) {
             return;
         }
-        busy = true;
+        busySet.add(name);
         try {
             console.log("[Lücken] Analysiere neu:", name);
             const definitionRoh = holeDefinition(name);
@@ -1481,6 +1504,7 @@
                             ggb.deleteObject(kandidatName);
                         }
                     }catch(e) {}
+                    listenQuelltext.delete(kandidatName);
                 }
             }
             kandidaten = entferneDoppelte(kandidaten);
@@ -1496,7 +1520,15 @@
                     });
                 }
             }
-            if (luecken.length > 0) {
+            // Checkbox bleibt bestehen, wenn entweder eine echte Lücke vorliegt,
+            // ODER zumindest ein Kandidat gefunden wurde (der Nenner also
+            // irgendwo Null wird, auch wenn es sich gerade nicht um eine
+            // hebbare Lücke handelt, z.B. bei a=0 ein Sprung statt einer Lücke).
+            // So muss die Box bei Variablenänderungen nicht ständig neu geladen
+            // werden. Wird dagegen NIE ein Kandidat gefunden (z.B. bei
+            // 1/(x²+a²+1), Nenner immer positiv, egal welches a), bleibt die Box
+            // konsequent weg.
+            if (luecken.length > 0 || kandidaten.length > 0) {
                 erstelleSteuerobjekt(name);
             } else {
                 loescheSteuerobjekt(name);
@@ -1531,7 +1563,7 @@
         }catch(e) {
             console.error("[Lücken] Fehler beim Aktualisieren:", e);
         }finally {
-            busy = false;
+            busySet.delete(name);
         }
     }
     starte();
