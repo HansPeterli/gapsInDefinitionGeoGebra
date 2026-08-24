@@ -13,7 +13,7 @@
     let ggb = null;
     let bekannteDefinitionen = new Map();
     let bekannteSteuerwerte = new Map();
-    const busySet = new Set();
+    let busy = false;
     function istFunktionsTyp(name) {
         try {
             const type = ggb.getObjectType(name);
@@ -215,26 +215,23 @@
     }
     function aktualisiereLueckenSichtbarkeit(funktionsName) {
         const sichtbar = sollLueckeSichtbarSein(funktionsName);
-        let i = 1;
-        while (true) {
-            const punktName = "Luecke_"+funktionsName+"_"+i;
-            let vorhanden = false;
-            try {
-                vorhanden = ggb.exists(punktName);
-            }catch(e) {
-                vorhanden = false;
+        const prefix = "Luecke_"+funktionsName+"_";
+        try {
+            const anzahl = ggb.getObjectNumber();
+            for (let i = 0; i < anzahl; i++) {
+                const objektName = ggb.getObjectName(i);
+                if (objektName && objektName.startsWith(prefix)) {
+                    try {
+                        ggb.setVisible(objektName, sichtbar);
+                    }catch(e) {}
+                }
             }
-            if (!vorhanden) {
-                break;
-            }
-            try {
-                ggb.setVisible(punktName, sichtbar);
-            }catch(e) {}
-            i++;
+        }catch(e) {
+            console.error("[Lücken] Fehler bei Sichtbarkeit:", e);
         }
     }
     function pruefeAlleFunktionen() {
-        if (!ggb) {
+        if (!ggb || busy) {
             return;
         }
         try {
@@ -1412,10 +1409,10 @@
         return true;
     }
     function aktualisiereFunktion(name) {
-        if (busySet.has(name)) {
+        if (busy) {
             return;
         }
-        busySet.add(name);
+        busy = true;
         try {
             console.log("[Lücken] Analysiere neu:", name);
             const definitionRoh = holeDefinition(name);
@@ -1499,12 +1496,11 @@
                     });
                 }
             }
-            // Checkbox bleibt bestehen, solange die Funktion überhaupt einen Nenner
-            // hat (Lücken sind dann grundsätzlich möglich, auch wenn bei den
-            // aktuellen Variablenwerten gerade keine vorliegt - z.B. weil bei a=0
-            // die einseitigen Grenzwerte nicht übereinstimmen). So muss die Box
-            // nicht bei jeder Wertänderung neu geladen werden.
-            erstelleSteuerobjekt(name);
+            if (luecken.length > 0) {
+                erstelleSteuerobjekt(name);
+            } else {
+                loescheSteuerobjekt(name);
+            }
             let counter = 1;
             for (const luecke of luecken) {
                 erzeugeLueckenPunkt(name, counter, luecke.x, luecke.y, exakteFormen, luecke.formel);
@@ -1535,7 +1531,7 @@
         }catch(e) {
             console.error("[Lücken] Fehler beim Aktualisieren:", e);
         }finally {
-            busySet.delete(name);
+            busy = false;
         }
     }
     starte();
