@@ -1371,7 +1371,7 @@
             return false;
         }
         try {
-            ggb.setPointStyle(pointName, 1);
+            ggb.setPointStyle(pointName, 2);
         }catch(e) {}
         try {
             ggb.setPointSize(pointName, 7);
