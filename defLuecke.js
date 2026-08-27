@@ -1520,15 +1520,11 @@
                     });
                 }
             }
-            // Checkbox bleibt bestehen, wenn entweder eine echte Lücke vorliegt,
-            // ODER zumindest ein Kandidat gefunden wurde (der Nenner also
-            // irgendwo Null wird, auch wenn es sich gerade nicht um eine
-            // hebbare Lücke handelt, z.B. bei a=0 ein Sprung statt einer Lücke).
-            // So muss die Box bei Variablenänderungen nicht ständig neu geladen
-            // werden. Wird dagegen NIE ein Kandidat gefunden (z.B. bei
-            // 1/(x²+a²+1), Nenner immer positiv, egal welches a), bleibt die Box
-            // konsequent weg.
-            if (luecken.length > 0 || kandidaten.length > 0) {
+            // Checkbox erscheint nur, wenn tatsächlich mindestens eine echte
+            // (hebbare) Lücke gefunden wurde. Reine Nenner-Nullstellen ohne
+            // hebbare Lücke (z.B. gewöhnliche Polstellen/senkrechte Asymptoten)
+            // erzeugen keine Box mehr.
+            if (luecken.length > 0) {
                 erstelleSteuerobjekt(name);
             } else {
                 loescheSteuerobjekt(name);
