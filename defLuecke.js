@@ -1445,6 +1445,8 @@
                 return;
             }
             const definition = ersetzeVariablenDurchWerte(definitionRoh, name);
+            const abhaengigeVariablen = extrahiereAbhaengigeVariablen(definitionRoh, name);
+            const hatParameter = abhaengigeVariablen.size > 0;
             const nennerRoh = findeNenner(definitionRoh);
             const nenner = findeNenner(definition);
             if (nenner.length === 0) {
@@ -1520,11 +1522,16 @@
                     });
                 }
             }
-            // Checkbox erscheint nur, wenn tatsächlich mindestens eine echte
-            // (hebbare) Lücke gefunden wurde. Reine Nenner-Nullstellen ohne
-            // hebbare Lücke (z.B. gewöhnliche Polstellen/senkrechte Asymptoten)
-            // erzeugen keine Box mehr.
-            if (luecken.length > 0) {
+            // Checkbox erscheint, wenn:
+            // - tatsächlich mindestens eine echte (hebbare) Lücke vorliegt, ODER
+            // - die Funktion von einem Parameter abhängt UND es mindestens einen
+            //   Nenner-Kandidaten gibt. Dann könnte durch Ändern des Parameters
+            //   jederzeit eine echte Lücke entstehen, auch wenn das beim
+            //   aktuellen Parameterwert (noch) nicht der Fall ist.
+            // Bei Funktionen OHNE Parameter (z.B. reine Polstelle wie 1/x) bleibt
+            // die Box dagegen weg, wenn keine echte Lücke vorliegt, da sich das
+            // Ergebnis nie ändern kann.
+            if (luecken.length > 0 || (hatParameter && kandidaten.length > 0)) {
                 erstelleSteuerobjekt(name);
             } else {
                 loescheSteuerobjekt(name);
