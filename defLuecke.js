@@ -1407,14 +1407,20 @@
         }catch(e) {}
         const xAnzeige = Math.round(x*1000000)/1000000;
         const exakterText = exakteFormen && exakteFormen.get(x.toFixed(6));
+        const istReineGanzzahl = exakterText && /^-?\d+$/.test(exakterText);
         let xBeschriftung;
-        if (exakterText) {
-            const istReineGanzzahl = /^-?\d+$/.test(exakterText);
-            if (istReineGanzzahl && Number(exakterText) === xAnzeige) {
-                xBeschriftung = "x = "+exakterText;
-            } else {
-                xBeschriftung = "x = "+exakterText+" (≈ "+xAnzeige+")";
-            }
+        if (istReineGanzzahl && Number(exakterText) === xAnzeige) {
+            // Garantiert konstanter, ganzzahliger Wert -> statische Beschriftung reicht.
+            xBeschriftung = "x = "+exakterText;
+        } else if (erfolgreichAlsFormel) {
+            // Der Punkt ist eine lebendige Formel (hängt evtl. von einem Schieberegler /
+            // Parameter ab). Damit sich die Beschriftung in Echtzeit mitbewegt, statt nur
+            // beim nächsten Skript-Durchlauf aktualisiert zu werden, nutzen wir GeoGebras
+            // eigenen dynamischen Beschriftungs-Platzhalter %x (x-Koordinate des Objekts
+            // selbst). Der wird von GeoGebra bei jeder Neuberechnung automatisch ersetzt.
+            xBeschriftung = exakterText ? ("x ≈ %x  ("+exakterText+")") : "x = %x";
+        } else if (exakterText) {
+            xBeschriftung = "x = "+exakterText+" (≈ "+xAnzeige+")";
         } else {
             xBeschriftung = "x = "+xAnzeige;
         }
