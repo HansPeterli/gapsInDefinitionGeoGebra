@@ -632,7 +632,23 @@
                 nenner.push(ausdruck.substring(pos, endeGesamt));
             } else {
                 let ende = pos;
-                while (ende < ausdruck.length&&!"+-*/".includes(ausdruck[ende])) {
+                let tiefe = 0;
+                while (ende < ausdruck.length) {
+                    const zeichen = ausdruck[ende];
+                    if (zeichen === "(") {
+                        tiefe++;
+                    } else if (zeichen === ")") {
+                        // Eine schließende Klammer, die zu keiner im Nenner selbst
+                        // geöffneten Klammer gehört (tiefe===0), markiert das Ende
+                        // des Nenners - sie gehört zur umgebenden Gruppe (z.B. bei
+                        // "(14 / 34) x") und darf NICHT mit übernommen werden.
+                        if (tiefe === 0) {
+                            break;
+                        }
+                        tiefe--;
+                    } else if (tiefe === 0 && "+-*/".includes(zeichen)) {
+                        break;
+                    }
                     ende++;
                 }
                 nenner.push(ausdruck.substring(pos, ende));
