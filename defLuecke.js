@@ -107,6 +107,13 @@
                     bekannteDefinitionen.clear();
                     bekannteSteuerwerte.clear();
                     break;
+                case"viewChanged2D":
+                case"viewChanged3D":
+                    // Sichtbarer Bereich hat sich durch Zoomen/Verschieben geändert -
+                    // periodische Nenner (z.B. sin(x)) können dadurch neue Lücken im
+                    // Sichtbereich haben. Debounced neu analysieren.
+                    planeAnsichtsAktualisierung();
+                    break;
                 default:
                     verarbeiteZiel(ziel, behandleObjektAktualisiert);
                     break;
@@ -336,6 +343,35 @@
             }catch(e) {}
         });
         return signatur;
+    }
+    function holeSichtGrenzen() {
+        // Nutzt GeoGebras eingebauten Corner()-Befehl (Corner(1) = untere linke,
+        // Corner(2) = untere rechte Ecke der Zeichenfläche), um den aktuell
+        // sichtbaren x-Bereich zu ermitteln - unabhängig von Zoomstufe/Verschiebung.
+        try {
+            const xmin = ggb.getValue("x(Corner(1))");
+            const xmax = ggb.getValue("x(Corner(2))");
+            if (isFinite(xmin) && isFinite(xmax) && xmax > xmin) {
+                return {
+                    xmin: xmin,
+                    xmax: xmax
+                };
+            }
+        }catch(e) {}
+        return null;
+    }
+    let ansichtsDebounce = null;
+    function planeAnsichtsAktualisierung() {
+        if (ansichtsDebounce) {
+            clearTimeout(ansichtsDebounce);
+        }
+        ansichtsDebounce = setTimeout(function() {
+            ansichtsDebounce = null;
+            for (const name of bekannteDefinitionen.keys()) {
+                aktualisiereFunktion(name);
+                aktualisiereLueckenSichtbarkeit(name);
+            }
+        }, 300);
     }
     const debounceTimer = new Map();
     function planeAktualisierung(name, verzoegerung) {
@@ -1156,12 +1192,31 @@
                     }
                 }
             };
-            const grenze = 100;
-            const schritt = 0.5;
+            // Statt einer festen Grenze von ±100 orientieren wir uns am aktuell
+            // sichtbaren x-Bereich der Zeichenfläche (plus Puffer von einer ganzen
+            // Sichtbreite auf jeder Seite). So werden bei periodischen Nennern
+            // (z.B. sin(x), die unendlich viele Nullstellen haben) immer alle im
+            // sichtbaren Bereich liegenden Lücken gefunden - und beim Zoomen/
+            // Verschieben (Event "viewChanged2D") wird automatisch neu gesucht,
+            // sodass es sich für den Nutzer wie ein "unendlicher" Bereich anfühlt.
+            // Ist der Sichtbereich nicht ermittelbar, greift als Rückfallebene
+            // weiterhin die alte feste Grenze von ±100.
+            let grenzeMin=-100, grenzeMax = 100;
+            const sicht = holeSichtGrenzen();
+            if (sicht) {
+                const breite = Math.max(1, sicht.xmax-sicht.xmin);
+                grenzeMin = sicht.xmin-breite;
+                grenzeMax = sicht.xmax+breite;
+            }
+            // Feste Anzahl Abtastschritte (statt fester Schrittweite): bleibt
+            // dadurch bei jeder Zoomstufe ähnlich performant, wird beim Reinzoomen
+            // automatisch feiner und beim Rauszoomen automatisch gröber.
+            const anzahlSchritte = 400;
+            const schritt = Math.max(0.001, (grenzeMax-grenzeMin)/anzahlSchritte);
             let xLetzte = null;
             let yLetzte = null;
             let treffer = 0;
-            for (let x=-grenze; x <= grenze+1e-9; x += schritt) {
+            for (let x=grenzeMin; x <= grenzeMax+1e-9; x += schritt) {
                 const y = wertBei(tempName, x);
                 if (isFinite(y)) {
                     if (xLetzte !== null && isFinite(yLetzte)) {
