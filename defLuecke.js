@@ -360,6 +360,10 @@
         }catch(e) {}
         return null;
     }
+    // Merkt sich pro Funktion, welcher x-Bereich beim letzten Durchlauf durchsucht
+    // wurde (nur für Funktionen, die Stufe 3/den Sichtbereich überhaupt brauchen,
+    // z.B. periodische Nenner wie sin(x)). Siehe planeAnsichtsAktualisierung.
+    const letzterSuchbereich = new Map();
     let ansichtsDebounce = null;
     function planeAnsichtsAktualisierung() {
         if (ansichtsDebounce) {
@@ -367,9 +371,22 @@
         }
         ansichtsDebounce = setTimeout(function() {
             ansichtsDebounce = null;
-            for (const name of bekannteDefinitionen.keys()) {
-                aktualisiereFunktion(name);
-                aktualisiereLueckenSichtbarkeit(name);
+            const sicht = holeSichtGrenzen();
+            if (!sicht) {
+                return;
+            }
+            for (const name of letzterSuchbereich.keys()) {
+                const alt = letzterSuchbereich.get(name);
+                // Kleiner Sicherheitsabstand (10% der Sichtbreite): löst erst aus,
+                // wenn man sich dem Rand des zuletzt durchsuchten Puffers wirklich
+                // nähert - normales Zoomen/Verschieben innerhalb des Puffers löst
+                // KEINE Neuanalyse aus (kein Flackern/Verschwinden der Punkte).
+                const puffer = Math.max(0.5, (sicht.xmax-sicht.xmin)*0.1);
+                const nochGueltig = sicht.xmin >= alt.min+puffer && sicht.xmax <= alt.max-puffer;
+                if (!nochGueltig && bekannteDefinitionen.has(name)) {
+                    aktualisiereFunktion(name);
+                    aktualisiereLueckenSichtbarkeit(name);
+                }
             }
         }, 300);
     }
@@ -667,30 +684,69 @@
                 }
                 nenner.push(ausdruck.substring(pos, endeGesamt));
             } else {
-                let ende = pos;
-                let tiefe = 0;
-                while (ende < ausdruck.length) {
-                    const zeichen = ausdruck[ende];
-                    if (zeichen === "(") {
-                        tiefe++;
-                    } else if (zeichen === ")") {
-                        // Eine schließende Klammer, die zu keiner im Nenner selbst
-                        // geöffneten Klammer gehört (tiefe===0), markiert das Ende
-                        // des Nenners - sie gehört zur umgebenden Gruppe (z.B. bei
-                        // "(14 / 34) x") und darf NICHT mit übernommen werden.
-                        if (tiefe === 0) {
-                            break;
-                        }
-                        tiefe--;
-                    } else if (tiefe === 0 && "+-*/".includes(zeichen)) {
-                        break;
-                    }
-                    ende++;
-                }
-                nenner.push(ausdruck.substring(pos, ende));
+                nenner.push(leseAtomarenNennerTerm(ausdruck, pos));
             }
         }
         return nenner;
+    }
+    function leseKlammerGruppe(s, start) {
+        // s[start] muss "(" sein. Liefert den Index NACH der zugehörigen
+        // schließenden Klammer (balanciert).
+        let tiefe = 0;
+        for (let j = start; j < s.length; j++) {
+            if (s[j] === "(") {
+                tiefe++;
+            } else if (s[j] === ")") {
+                tiefe--;
+                if (tiefe === 0) {
+                    return j+1;
+                }
+            }
+        }
+        return s.length;
+    }
+    function leseAtomarenNennerTerm(ausdruck, pos) {
+        // Liest GENAU EINEN atomaren Term ab pos: eine Zahl (34, 3.14), einen
+        // Bezeichner (x, pi, a) - optional gefolgt von einem eigenen
+        // Funktionsaufruf wie sqrt(...) - und optional einem direkt
+        // angehängten Exponenten (x^2, 34^2). Danach ist IMMER Schluss, auch
+        // wenn ohne Operator ein weiterer Faktor folgt (implizite
+        // Multiplikation, z.B. das "x" in "34 x" oder "sqrt(x) y"): dieser
+        // gehört mathematisch NICHT mehr zum Nenner, da Division und
+        // Multiplikation gleichrangig links-nach-rechts ausgewertet werden
+        // ("14 / 34 x" = "(14 / 34) * x", nicht "14 / (34 x)").
+        let ende = pos;
+        if (ende < ausdruck.length && /[0-9.]/.test(ausdruck[ende])) {
+            while (ende < ausdruck.length && /[0-9.]/.test(ausdruck[ende])) {
+                ende++;
+            }
+        } else if (ende < ausdruck.length && /[A-Za-zÀ-ÖØ-öø-ÿ_]/.test(ausdruck[ende])) {
+            while (ende < ausdruck.length && istBezeichnerZeichen(ausdruck[ende])) {
+                ende++;
+            }
+            if (ausdruck[ende] === "(") {
+                ende = leseKlammerGruppe(ausdruck, ende);
+            }
+        } else {
+            return "";
+        }
+        if (ausdruck[ende] === "^") {
+            let expEnde = ende+1;
+            if (ausdruck[expEnde] === "-") {
+                expEnde++;
+            }
+            if (ausdruck[expEnde] === "(") {
+                expEnde = leseKlammerGruppe(ausdruck, expEnde);
+            } else {
+                while (expEnde < ausdruck.length && /[0-9.]/.test(ausdruck[expEnde])) {
+                    expEnde++;
+                }
+            }
+            if (expEnde > ende+1) {
+                ende = expEnde;
+            }
+        }
+        return ausdruck.substring(pos, ende);
     }
     function istBezeichnerZeichen(ch) {
         return /[A-Za-z0-9_]/.test(ch);
@@ -1174,7 +1230,7 @@
         }
         return null;
     }
-    function findeNullstellenMitGeoGebra(nenner, index, exakteFormen) {
+    function findeNullstellenMitGeoGebra(nenner, index, exakteFormen, sucheGrenzen) {
         const ergebnis = [];
         const tempName = "ggbLueckenNenner"+index+"_"+Date.now();
         const befehl = tempName+"(x)="+nenner;
@@ -1194,20 +1250,16 @@
             };
             // Statt einer festen Grenze von ±100 orientieren wir uns am aktuell
             // sichtbaren x-Bereich der Zeichenfläche (plus Puffer von einer ganzen
-            // Sichtbreite auf jeder Seite). So werden bei periodischen Nennern
-            // (z.B. sin(x), die unendlich viele Nullstellen haben) immer alle im
-            // sichtbaren Bereich liegenden Lücken gefunden - und beim Zoomen/
-            // Verschieben (Event "viewChanged2D") wird automatisch neu gesucht,
+            // Sichtbreite auf jeder Seite), den der Aufrufer (aktualisiereFunktion)
+            // einmal pro Analyse-Durchlauf ermittelt und hier übergibt. So werden
+            // bei periodischen Nennern (z.B. sin(x), die unendlich viele
+            // Nullstellen haben) immer alle im sichtbaren Bereich liegenden Lücken
+            // gefunden - und beim Zoomen/Verschieben wird automatisch neu gesucht,
             // sodass es sich für den Nutzer wie ein "unendlicher" Bereich anfühlt.
             // Ist der Sichtbereich nicht ermittelbar, greift als Rückfallebene
             // weiterhin die alte feste Grenze von ±100.
-            let grenzeMin=-100, grenzeMax = 100;
-            const sicht = holeSichtGrenzen();
-            if (sicht) {
-                const breite = Math.max(1, sicht.xmax-sicht.xmin);
-                grenzeMin = sicht.xmin-breite;
-                grenzeMax = sicht.xmax+breite;
-            }
+            const grenzeMin = sucheGrenzen?sucheGrenzen.min: -100;
+            const grenzeMax = sucheGrenzen?sucheGrenzen.max: 100;
             // Feste Anzahl Abtastschritte (statt fester Schrittweite): bleibt
             // dadurch bei jeder Zoomstufe ähnlich performant, wird beim Reinzoomen
             // automatisch feiner und beim Rauszoomen automatisch gröber.
@@ -1414,7 +1466,7 @@
         }
         return(l+r)/2;
     }
-    function findeNullstellen(nenner, index, exakteFormen) {
+    function findeNullstellen(nenner, index, exakteFormen, sucheGrenzen) {
         let ergebnis = [];
         const faktoren = extrahiereFaktoren(nenner);
         for (let i = 0; i < faktoren.length; i++) {
@@ -1430,7 +1482,7 @@
                 teilergebnis = hoehereNullstellen(faktor);
             }
             if (teilergebnis.length === 0) {
-                teilergebnis = findeNullstellenMitGeoGebra(entferneAussenklammern(faktor), index+"_"+i, exakteFormen);
+                teilergebnis = findeNullstellenMitGeoGebra(entferneAussenklammern(faktor), index+"_"+i, exakteFormen, sucheGrenzen);
             }
             ergebnis = ergebnis.concat(teilergebnis);
         }
@@ -1519,6 +1571,7 @@
             if (!definitionRoh) {
                 loescheSteuerobjekt(name);
                 loescheLueckenPunkte(name);
+                letzterSuchbereich.delete(name);
                 return;
             }
             const definition = ersetzeVariablenDurchWerte(definitionRoh, name);
@@ -1530,12 +1583,33 @@
                 console.log("[Lücken] Kein Nenner.");
                 loescheSteuerobjekt(name);
                 loescheLueckenPunkte(name);
+                letzterSuchbereich.delete(name);
                 return;
             }
             let kandidaten = [];
             const formelZuX = new Map();
             const exakteFormen = new Map();
             const verwendeteListen = new Set();
+            // Sichtbereich (für periodische Nenner wie sin(x)) nur EINMAL pro
+            // Analyse-Durchlauf ermitteln, statt bei jedem einzelnen Faktor neu -
+            // spart unnötige GeoGebra-API-Aufrufe und sorgt für konsistente Grenzen
+            // innerhalb eines Durchlaufs.
+            let sucheGrenzen = null;
+            {
+                const sicht = holeSichtGrenzen();
+                if (sicht) {
+                    const breite = Math.max(1, sicht.xmax-sicht.xmin);
+                    sucheGrenzen = {
+                        min: sicht.xmin-breite,
+                        max: sicht.xmax+breite
+                    };
+                }
+            }
+            // Wird true, sobald ein Nenner-Faktor tatsächlich per numerischer
+            // Sichtbereichs-Suche (Stufe 3) gelöst werden musste - nur dann lohnt
+            // sich eine erneute Analyse bei reinem Zoomen/Verschieben (siehe
+            // planeAnsichtsAktualisierung).
+            let brauchtSichtBereich = false;
             for (let i = 0; i < nenner.length; i++) {
                 const faktorenRoh = nennerRoh[i]?extrahiereFaktoren(nennerRoh[i]): [];
                 const faktorenSub = extrahiereFaktoren(nenner[i]);
@@ -1566,7 +1640,8 @@
                     }
                     // Stufe 3: Fallback - rein numerisch (z.B. wenn Solutions()
                     // scheitert, oder keine Variable im Faktor vorkommt).
-                    const teilergebnis = findeNullstellen(faktorenSub[j], i+"_"+j, exakteFormen);
+                    brauchtSichtBereich = true;
+                    const teilergebnis = findeNullstellen(faktorenSub[j], i+"_"+j, exakteFormen, sucheGrenzen);
                     kandidaten = kandidaten.concat(teilergebnis);
                 }
             }
@@ -1639,6 +1714,15 @@
                 ueberzaehligerIndex++;
             }
             aktualisiereLueckenSichtbarkeit(name);
+            // Nur merken, wenn diese Funktion überhaupt vom Sichtbereich abhängt
+            // (Stufe 3 wurde gebraucht, z.B. bei periodischen Nennern wie sin(x)).
+            // Für alle anderen Funktionen soll ein reines Zoomen/Verschieben keine
+            // erneute Analyse auslösen (siehe planeAnsichtsAktualisierung).
+            if (brauchtSichtBereich && sucheGrenzen) {
+                letzterSuchbereich.set(name, sucheGrenzen);
+            } else {
+                letzterSuchbereich.delete(name);
+            }
             console.log("[Lücken] Neue Lücken:", luecken);
         }catch(e) {
             console.error("[Lücken] Fehler beim Aktualisieren:", e);
