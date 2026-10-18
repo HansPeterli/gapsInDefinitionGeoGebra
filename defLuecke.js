@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GeoGebra Definitionslücken
 // @namespace    https://github.com/HansPeterli/gapsInDefinitionGeoGebra
-// @version      1.0
+// @version      1.3
 // @description  Erkennt und zeigt Definitionslücken (hebbare Unstetigkeiten) von Funktionen in GeoGebra automatisch an.
 // @author       HansPeterli
 // @match        https://www.geogebra.org/classic*
@@ -14,10 +14,119 @@
     let bekannteDefinitionen = new Map();
     let bekannteSteuerwerte = new Map();
     const busySet = new Set();
+    let intervallId = null;
+    let listenerAktiv = false;
+    function pflegeIntervall() {
+        // Polling-Fallback läuft nur, solange mindestens eine 2D-Funktion bekannt ist
+        // (oder wenn kein Event-Listener verfügbar ist).
+        const noetig = !listenerAktiv || bekannteDefinitionen.size > 0;
+        if (noetig && intervallId === null) {
+            intervallId = setInterval(pruefeAlleFunktionen, 2000);
+        } else if (!noetig && intervallId !== null) {
+            clearInterval(intervallId);
+            intervallId = null;
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Sprache: übernimmt automatisch die Sprache von GeoGebra
+    // ------------------------------------------------------------------
+    const TEXTE = {
+        de: { steuer: "Lücken", luecke: "Definitionslücke", zeige: "Definitionslücken anzeigen", gekuerzt: "gekürzt" },
+        en: { steuer: "Discontinuities", luecke: "Removable discontinuity", zeige: "Show removable discontinuities", gekuerzt: "simplified" },
+        fr: { steuer: "Discontinuités", luecke: "Discontinuité éliminable", zeige: "Afficher les discontinuités éliminables", gekuerzt: "simplifiée" },
+        es: { steuer: "Discontinuidades", luecke: "Discontinuidad evitable", zeige: "Mostrar discontinuidades evitables", gekuerzt: "simplificada" },
+        it: { steuer: "Discontinuità", luecke: "Discontinuità eliminabile", zeige: "Mostra discontinuità eliminabili", gekuerzt: "semplificata" },
+        pt: { steuer: "Descontinuidades", luecke: "Descontinuidade removível", zeige: "Mostrar descontinuidades removíveis", gekuerzt: "simplificada" },
+        nl: { steuer: "Discontinuïteiten", luecke: "Hefbare discontinuïteit", zeige: "Hefbare discontinuïteiten tonen", gekuerzt: "vereenvoudigd" },
+        pl: { steuer: "Nieciągłości", luecke: "Nieciągłość usuwalna", zeige: "Pokaż nieciągłości usuwalne", gekuerzt: "uproszczona" },
+        cs: { steuer: "Nespojitosti", luecke: "Odstranitelná nespojitost", zeige: "Zobrazit odstranitelné nespojitosti", gekuerzt: "zjednodušená" },
+        ru: { steuer: "Разрывы", luecke: "Устранимый разрыв", zeige: "Показать устранимые разрывы", gekuerzt: "упрощённая" },
+        tr: { steuer: "Süreksizlikler", luecke: "Kaldırılabilir süreksizlik", zeige: "Kaldırılabilir süreksizlikleri göster", gekuerzt: "sadeleştirilmiş" }
+    };
+    function sprache() {
+        let l = "";
+        try {
+            if (ggb && typeof ggb.getLanguage === "function") {
+                l = ggb.getLanguage();
+            }
+        } catch (e) {}
+        if (!l) {
+            try {
+                l = new URLSearchParams(window.location.search).get("lang") || "";
+            } catch (e) {}
+        }
+        if (!l) {
+            l = document.documentElement.lang || navigator.language || "";
+        }
+        l = String(l).toLowerCase().substring(0, 2);
+        return TEXTE[l] ? l : "en";
+    }
+    function tr(schluessel) {
+        return TEXTE[sprache()][schluessel];
+    }
+
+    // Name des Steuer-Booleans: ebenfalls in der Sprache von GeoGebra.
+    // Existiert bereits ein Boolean in einer anderen Sprache, wird er weiterverwendet (und bei Bedarf umbenannt).
+    function steuerPraefixe() {
+        return Object.keys(TEXTE).map(function (l) {
+            return TEXTE[l].steuer + "_";
+        });
+    }
+    function steuerObjektNameNeu(funktionsName) {
+        return TEXTE[sprache()].steuer + "_" + funktionsName;
+    }
+    function funktionsNameAusSteuer(name) {
+        const ps = steuerPraefixe();
+        for (let i = 0; i < ps.length; i++) {
+            if (name.indexOf(ps[i]) === 0) {
+                return name.substring(ps[i].length);
+            }
+        }
+        return null;
+    }
+    function steuerObjektName(funktionsName) {
+        const ps = steuerPraefixe();
+        for (let i = 0; i < ps.length; i++) {
+            try {
+                if (ggb.exists(ps[i] + funktionsName)) {
+                    return ps[i] + funktionsName;
+                }
+            } catch (e) {}
+        }
+        return steuerObjektNameNeu(funktionsName);
+    }
+    function pflegeSteuerSprache(funktionsName) {
+        const alt = steuerObjektName(funktionsName);
+        const neu = steuerObjektNameNeu(funktionsName);
+        try {
+            if (alt !== neu && ggb.exists(alt) && !ggb.exists(neu)) {
+                ggb.renameObject(alt, neu);
+                registrierteSteuerListener.delete(alt);
+            }
+            const s = steuerObjektName(funktionsName);
+            if (ggb.exists(s)) {
+                ggb.setCaption(s, tr("zeige"));
+                ggb.setLabelStyle(s, 3);
+            }
+        } catch (e) {}
+    }
+    function hatYVariable(name) {
+        // Funktionen mit zwei Variablen f(x,y) gehören zum 3D-Script und werden hier ignoriert.
+        try {
+            const d = String(ggb.getDefinitionString(name) || "");
+            return /(^|[^A-Za-zÀ-ÖØ-öø-ÿ_])y(?![A-Za-zÀ-ÖØ-öø-ÿ0-9_])/.test(d);
+        }catch(e) {
+            return false;
+        }
+    }
     function istFunktionsTyp(name) {
         try {
             const type = ggb.getObjectType(name);
-            return type === "function" || type === "functionnv" || type === "FUNCTION";
+            if (type !== "function" && type !== "functionnv" && type !== "FUNCTION") {
+                return false;
+            }
+            return !hatYVariable(name);
         }catch(e) {
             return false;
         }
@@ -47,6 +156,7 @@
             }catch(e) {}
             bekannteDefinitionen.delete(name);
             bekannteSteuerwerte.delete(name);
+            pflegeIntervall();
         }
     }
     function behandleObjektAktualisiert(name) {
@@ -58,8 +168,9 @@
             aktualisiereLueckenSichtbarkeit(name);
             return;
         }
-        if (name.indexOf("Lücken_") === 0) {
-            const funktionsName = name.substring("Lücken_".length);
+        const steuerFuer = funktionsNameAusSteuer(name);
+        if (steuerFuer !== null && bekannteDefinitionen.has(steuerFuer)) {
+            const funktionsName = steuerFuer;
             if (bekannteDefinitionen.has(funktionsName)) {
                 aktualisiereLueckenSichtbarkeit(funktionsName);
             }
@@ -106,6 +217,7 @@
                 case"clear":
                     bekannteDefinitionen.clear();
                     bekannteSteuerwerte.clear();
+                    pflegeIntervall();
                     break;
                 case"viewChanged2D":
                 case"viewChanged3D":
@@ -146,6 +258,7 @@
         try {
             if (typeof ggb.registerClientListener === "function") {
                 ggb.registerClientListener(clientListener);
+                listenerAktiv = true;
                 console.log("[Lücken] Client-Listener registriert (sofortige Reaktion aktiv)");
             } else {
                 console.log("[Lücken] registerClientListener nicht verfügbar, nutze nur Intervall-Prüfung");
@@ -153,13 +266,10 @@
         }catch(e) {
             console.error("[Lücken] Konnte Client-Listener nicht registrieren:", e);
         }
-        setInterval(pruefeAlleFunktionen, 2000);
         pruefeAlleFunktionen();
+        pflegeIntervall();
     }
     const registrierteSteuerListener = new Set();
-    function steuerObjektName(funktionsName) {
-        return"Lücken_"+funktionsName;
-    }
     function registriereSteuerListener(funktionsName) {
         const steuerName = steuerObjektName(funktionsName);
         if (registrierteSteuerListener.has(steuerName)) {
@@ -177,10 +287,15 @@
         }
     }
     function erstelleSteuerobjekt(funktionsName) {
+        pflegeSteuerSprache(funktionsName);
         const steuerName = steuerObjektName(funktionsName);
         try {
             if (!ggb.exists(steuerName)) {
                 ggb.evalCommand(steuerName+" = false");
+                try {
+                    ggb.setCaption(steuerName, tr("zeige"));
+                    ggb.setLabelStyle(steuerName, 3);
+                } catch(e) {}
                 console.log("[Lücken] Steuerobjekt erstellt:", steuerName);
             }
         }catch(e) {
@@ -252,13 +367,7 @@
                 if (!name) {
                     continue;
                 }
-                let type;
-                try {
-                    type = ggb.getObjectType(name);
-                }catch(e) {
-                    continue;
-                }
-                if (type !== "function" && type !== "functionnv" && type !== "FUNCTION") {
+                if (!istFunktionsTyp(name)) {
                     continue;
                 }
                 aktuellVorhanden.add(name);
@@ -279,6 +388,7 @@
                     bekannteSteuerwerte.delete(name);
                 }
             }
+            pflegeIntervall();
         }catch(e) {
             console.error("[Lücken] Fehler:", e);
         }
@@ -366,6 +476,9 @@
     const letzterSuchbereich = new Map();
     let ansichtsDebounce = null;
     function planeAnsichtsAktualisierung() {
+        if (letzterSuchbereich.size === 0) {
+            return;
+        }
         if (ansichtsDebounce) {
             clearTimeout(ansichtsDebounce);
         }
@@ -411,6 +524,7 @@
         if (!bekannteDefinitionen.has(name)) {
             console.log("[Lücken] Neue Funktion:", name);
             bekannteDefinitionen.set(name, signatur);
+            pflegeIntervall();
             planeAktualisierung(name, 0);
             // Sicherheits-Nachprüfung: GeoGebras CAS-Engine (für Solutions())
             // ist direkt nach dem Laden manchmal noch nicht vollständig bereit,
@@ -1548,7 +1662,7 @@
             xBeschriftung = "x = "+xAnzeige;
         }
         try {
-            ggb.setCaption(pointName, "Definitionslücke "+xBeschriftung);
+            ggb.setCaption(pointName, tr("luecke")+" "+xBeschriftung);
             ggb.setLabelStyle(pointName, 3);
             ggb.setLabelVisible(pointName, true);
         }catch(e) {}
