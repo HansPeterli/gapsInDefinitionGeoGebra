@@ -6,7 +6,7 @@
 
 *Beispiel / Example: f(x) = (x²−1)/(x−1), Definitionslücke bei x = 1*
 
-[⬇️ 2D-Skript installieren / Install 2D script](https://raw.githubusercontent.com/HansPeterli/gapsInDefinitionGeoGebra/main/defLuecken.user.js) · [⬇️ 3D-Skript installieren / Install 3D script](https://raw.githubusercontent.com/HansPeterli/gapsInDefinitionGeoGebra/main/defLuecken3D.user.js)
+[⬇️ 2D-Skript installieren / Install 2D script](https://raw.githubusercontent.com/HansPeterli/gapsInDefinitionGeoGebra/main/defLuecken2D.user.js) · [⬇️ 3D-Skript installieren / Install 3D script](https://raw.githubusercontent.com/HansPeterli/gapsInDefinitionGeoGebra/main/defLuecken3D.user.js)
 
 *(Voraussetzung / Requires: [Tampermonkey](https://www.tampermonkey.net/) oder [Userscripts](https://github.com/quoid/userscripts) (iOS))*
 
