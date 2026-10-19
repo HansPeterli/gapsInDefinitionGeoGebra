@@ -20,7 +20,7 @@ Userscripts for **GeoGebra** that automatically find, mark and update **removabl
 
 | Script | For | Shows |
 |---|---|---|
-| `defLuecken.user.js` | 2D functions `f(x)` | open points `(x \| y)` |
+| `defLuecken2D.user.js` | 2D functions `f(x)` | open points `(x \| y)` |
 | `defLuecken3D.user.js` | 3D functions `f(x,y)` | points `(x \| y \| z)`, curves and line segments |
 
 Each script is **only active when a matching function exists**: the 2D script ignores everything except `f(x)`, the 3D script ignores everything except `f(x,y)`. Without a matching function they do no work. You can install one or both – they do not interfere with each other.
@@ -54,7 +54,7 @@ You need a **userscript manager** in your browser – a small extension that loa
    - Firefox → [addons.mozilla.org](https://addons.mozilla.org/) → search `Tampermonkey` → add.
 2. Click the **Tampermonkey icon** (top right) → open the **Dashboard**.
 3. Click **"Create a new script"** or the **"+"** icon.
-4. Copy the complete content of `defLuecken.user.js` (2D) and/or `defLuecken3D.user.js` (3D) into the editor (delete the sample text first). Use one new script per file.
+4. Copy the complete content of `defLuecken2d.user.js` (2D) and/or `defLuecken3D.user.js` (3D) into the editor (delete the sample text first). Use one new script per file.
 5. Save with <kbd>Ctrl</kbd> + <kbd>S</kbd>.
 6. Open GeoGebra: [geogebra.org/classic](https://www.geogebra.org/classic) (reload the page if it was already open). For the 3D script, [geogebra.org/3d](https://www.geogebra.org/3d) works too.
 
@@ -80,7 +80,7 @@ Standard Chrome on Android does **not** support extensions. Two alternatives:
 1. Install [Kiwi Browser](https://play.google.com/store/apps/details?id=com.kiwibrowser.browser) from the Play Store.
 2. Open Kiwi Browser → menu (⋮) → **Extensions**.
 3. **"Load more extensions"** → Chrome Web Store → install `Tampermonkey`.
-4. Open the Tampermonkey dashboard → new script → paste the content of `defLuecken.user.js` and/or `defLuecken3D.user.js` → save.
+4. Open the Tampermonkey dashboard → new script → paste the content of `defLuecken2D.user.js` and/or `defLuecken3D.user.js` → save.
 5. Open GeoGebra in Kiwi Browser: [geogebra.org/classic](https://www.geogebra.org/classic).
 
 </details>
@@ -92,7 +92,7 @@ Standard Chrome on Android does **not** support extensions. Two alternatives:
 
 1. Install the free app [`Userscripts`](https://apps.apple.com/app/userscripts/id1463298887) from the App Store.
 2. **Settings** → **Safari** → **Extensions** → enable `Userscripts` and allow website access.
-3. In the Userscripts app, create/select a folder for scripts and put `defLuecken.user.js` and/or `defLuecken3D.user.js` there (e.g. via the Files app: **Share** → **Save to Files** → chosen folder).
+3. In the Userscripts app, create/select a folder for scripts and put `defLuecken2D.user.js` and/or `defLuecken3D.user.js` there (e.g. via the Files app: **Share** → **Save to Files** → chosen folder).
 4. Open Safari → load GeoGebra – the script is applied automatically.
 
 </details>
@@ -173,7 +173,7 @@ Userscripts für **GeoGebra**, die **hebbare Definitionslücken** (hebbare Unste
 
 | Skript | Für | Zeigt |
 |---|---|---|
-| `defLuecken.user.js` | 2D-Funktionen `f(x)` | offene Punkte `(x \| y)` |
+| `defLuecken2D.user.js` | 2D-Funktionen `f(x)` | offene Punkte `(x \| y)` |
 | `defLuecken3D.user.js` | 3D-Funktionen `f(x,y)` | Punkte `(x \| y \| z)`, Kurven und Strecken |
 
 Jedes Skript wird **nur aktiv, wenn es eine passende Funktion gibt**: Das 2D-Skript beachtet nur `f(x)`, das 3D-Skript nur `f(x,y)`. Ohne passende Funktion tun sie nichts. Du kannst eines oder beide installieren – sie stören sich nicht.
@@ -207,7 +207,7 @@ Du brauchst in jedem Browser einen **Userscript-Manager** – eine kleine Erweit
    - Firefox → [addons.mozilla.org](https://addons.mozilla.org/) → `Tampermonkey` suchen → hinzufügen.
 2. Auf das **Tampermonkey-Symbol** oben rechts im Browser klicken → **Dashboard** öffnen.
 3. Reiter **„Neues Skript“** bzw. das **„+“**-Symbol anklicken.
-4. Den kompletten Inhalt von `defLuecken.user.js` (2D) und/oder `defLuecken3D.user.js` (3D) in den Editor kopieren (Beispieltext vorher löschen). Pro Datei ein neues Skript anlegen.
+4. Den kompletten Inhalt von `defLuecken2D.user.js` (2D) und/oder `defLuecken3D.user.js` (3D) in den Editor kopieren (Beispieltext vorher löschen). Pro Datei ein neues Skript anlegen.
 5. Mit <kbd>Strg</kbd> + <kbd>S</kbd> speichern.
 6. GeoGebra öffnen: [geogebra.org/classic](https://www.geogebra.org/classic) (Seite ggf. neu laden, falls schon offen). Für das 3D-Skript geht auch [geogebra.org/3d](https://www.geogebra.org/3d).
 
@@ -233,7 +233,7 @@ Der Standard-Chrome auf Android unterstützt **keine** Erweiterungen. Zwei Alter
 1. [Kiwi Browser](https://play.google.com/store/apps/details?id=com.kiwibrowser.browser) aus dem Play Store installieren.
 2. Kiwi Browser öffnen → Menü (⋮) → **Extensions**.
 3. **„Weitere Erweiterungen laden“** → Chrome Web Store → `Tampermonkey` installieren.
-4. Tampermonkey-Dashboard öffnen → neues Skript → Inhalt von `defLuecken.user.js` und/oder `defLuecken3D.user.js` einfügen → speichern.
+4. Tampermonkey-Dashboard öffnen → neues Skript → Inhalt von `defLuecken2D.user.js` und/oder `defLuecken3D.user.js` einfügen → speichern.
 5. GeoGebra in Kiwi Browser öffnen: [geogebra.org/classic](https://www.geogebra.org/classic).
 
 </details>
@@ -245,7 +245,7 @@ Der Standard-Chrome auf Android unterstützt **keine** Erweiterungen. Zwei Alter
 
 1. Im App Store die kostenlose App [`Userscripts`](https://apps.apple.com/app/userscripts/id1463298887) installieren.
 2. **Einstellungen** → **Safari** → **Erweiterungen** → `Userscripts` aktivieren und Website-Zugriff erlauben.
-3. In der Userscripts-App einen Ordner für Skripte anlegen/auswählen und `defLuecken.user.js` und/oder `defLuecken3D.user.js` dort ablegen (z. B. über die Dateien-App: **Teilen** → **In Dateien sichern** → gewählter Ordner).
+3. In der Userscripts-App einen Ordner für Skripte anlegen/auswählen und `defLuecken2D.user.js` und/oder `defLuecken3D.user.js` dort ablegen (z. B. über die Dateien-App: **Teilen** → **In Dateien sichern** → gewählter Ordner).
 4. Safari öffnen → GeoGebra laden – das Skript greift automatisch.
 
 </details>
